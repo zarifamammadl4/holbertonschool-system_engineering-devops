@@ -1,0 +1,25 @@
+# 3-scale_up
+
+## Application server vs Web server — Scale Up Infrastructure
+
+In this task, we upgrade the previous infrastructure by adding a new load-balancer and splitting the existing components (web server, application server, and database) into dedicated servers. This improves scalability, performance, and availability.
+
+---
+
+## Infrastructure Components
+
+### 1. New Load Balancer (HAProxy)
+**Why added:**  
+To create a load-balancer cluster with the original one. This removes the load balancer as a single point of failure.
+
+**Role:**  
+Distributes traffic to backend web servers. Ensures high availability.
+
+---
+
+### 2. Dedicated Web Server (Nginx)
+**Why added:**  
+Separating static content serving from application logic increases performance and makes scaling easier.
+
+**Role:**  
+Serves static

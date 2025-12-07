@@ -1,0 +1,87 @@
+Three-Server Secured & Monitored Web Infrastructure for www.foobar.com
+
+Overview (user flow)
+A user types https://www.foobar.com in their browser → DNS resolves www.foobar.com to the public IP of the load balancer → the request hits the edge firewall → the load balancer (HAProxy) receives the TLS connection and forwards traffic (load-balanced) to one of two application servers → each application server runs Nginx (web server) and an application runtime and talks to the Primary MySQL or Replica as needed. Monitoring agents run on every host and forward metrics/logs to an external monitoring service.
+
+Physical/logical layout (three servers + load balancer)
+- Load balancer (HAProxy) — public endpoint, terminates TLS for www.foobar.com, listens on port 443 and 80 (redirect → 443).
+- App Server 1 — Nginx + App runtime + monitoring agents + host firewall.
+- App Server 2 — Nginx + App runtime + monitoring agents + host firewall.
+- Primary MySQL — dedicated database instance (the writable primary).
+- Three firewalls (see below).
+- Monitoring collectors installed on each server.
+
+Required additions & why
+- 3 Firewalls:
+  1. Edge/Perimeter Firewall — in front of LB, allows only 80/443 and restricted management ports.
+  2. Internal Firewall — between LB and application tier, restricts which internal IPs/ports the LB can contact.
+  3. Host-based Firewall — on each server (iptables/ufw) to enforce host-level rules.
+  Why: layered defense (defense in depth), minimize attack surface and lateral movement.
+
+- 1 SSL certificate for www.foobar.com:
+  - Use Let’s Encrypt or a CA cert on the load balancer.
+  Why: TLS encrypts traffic, provides integrity and authentication, required by browsers.
+
+- 3 monitoring clients (one per server):
+  1. Sumo Logic Collector (or equivalent) — log/metrics forwarder (push).
+  2. Prometheus node_exporter — exposes host/process metrics (Prometheus pulls).
+  3. Metricbeat/Fluentd/Filebeat — collects logs and forwards to analytics or Sumo.
+  Why: visibility for metrics, logs, and traces; each collector provides different data types.
+
+Specific explanations
+- What are firewalls for?
+  Firewalls filter network traffic by rules; they block unauthorized inbound requests, limit outbound traffic, and segment the network to reduce attack surface.
+
+- Why is traffic served over HTTPS?
+  HTTPS (TLS) encrypts in-transit data, prevents tampering and eavesdropping, enables secure cookie and modern browser features, and verifies server identity.
+
+- What monitoring is used for and how it collects data?
+  - Prometheus (pull model) scrapes exporters like node_exporter and app exporters for metrics.
+  - Sumo Logic or similar uses agents that push logs/metrics over TLS to the cloud.
+  - Metricbeat/Fluentd tails logs and pushes them to ELK/Sumo/Graylog.
+  To monitor QPS: expose Nginx metrics (stub_status or exporter). Use Prometheus to scrape and compute `rate(nginx_requests_total[1m])` to get QPS, then visualize in Grafana and alert.
+
+- Load balancer distribution algorithm:
+  - Round-Robin example: LB forwards each new connection to the next healthy backend server in order.
+  - Alternatives: least connections, source hashing, weighted round-robin, etc.
+
+- Active-Active vs Active-Passive:
+  - Active-Active: multiple backends serve traffic concurrently (better utilization).
+  - Active-Passive: one active backend; passive standby accepts traffic only on failover.
+  - This design uses Active-Active for the application servers.
+
+- Primary-Replica (Master-Slave) MySQL cluster:
+  - Primary handles writes and writes binlog.
+  - Replicas stream and replay Primary’s binlog, serve reads and reduce Primary load.
+  - Promotion required if Primary fails.
+
+- Difference between Primary and Replica for the app:
+  - Writes must go to Primary; reads can go to Replicas (may be slightly stale due to replication lag).
+
+How to monitor web server QPS (concrete steps):
+1. Enable Nginx stub_status or run nginx-prometheus-exporter.
+2. Configure Prometheus to scrape the exporter.
+3. Use `rate(nginx_http_requests_total[1m])` or `rate(nginx_requests_total[1m])` to calculate QPS.
+4. Create Grafana dashboard and alert rules.
+
+Issues / limitations
+- Why terminating SSL at the LB is an issue:
+  - Internal traffic becomes plaintext unless re-encrypted.
+  - Private keys are concentrated at the LB (key compromise risk).
+  - Need proper X-Forwarded headers to preserve client IPs.
+  - Compliance may require end-to-end encryption.
+
+- Why a single writable MySQL is a problem:
+  - Single writable Primary is a SPOF for writes; failover is complex and may cause data loss or downtime.
+
+- Why servers with identical components (DB, web, app co-located) might be a problem:
+  - Resource contention (DB needs I/O, app needs CPU/memory).
+  - Security: compromise of one host reveals all components.
+  - Hard to scale DB independently from app; complex ops for backups and tuning.
+
+Best practices summary
+- Use TLS everywhere; consider TLS re-encryption to backends.
+- Implement LB HA (two LBs or managed LB) to avoid LB SPOF.
+- Use multiple DB replicas with automated failover or managed DB.
+- Keep app servers stateless and separate DB tier.
+- Use secrets management for certs/keys, and run monitoring + alerting (Prometheus + Grafana + log aggregation).
