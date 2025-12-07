@@ -1,0 +1,71 @@
+Three-Server Distributed Web Infrastructure for www.foobar.com
+
+User → DNS → www.foobar.com → Load Balancer → Web/App Servers → Database Cluster
+
+1. Added Components and Why:
+- Load Balancer (HAProxy):
+  - Distributes incoming traffic across multiple servers.
+  - Prevents overloading a single server.
+  - Improves availability, reliability, and scalability.
+
+- Two Application Servers:
+  - Ensure redundancy: if one server fails, the other continues serving traffic.
+  - Allow handling more simultaneous users.
+  - Each server runs:
+    - Nginx (web server)
+    - Application server (running application code)
+    - Code base (same version deployed on both servers)
+
+- Primary-Replica MySQL Cluster:
+  - Ensures high availability of database.
+  - Primary handles write operations.
+  - Replica handles read operations, reducing load on Primary.
+  - Replica can be promoted if Primary fails.
+
+2. Load Balancer Details:
+- Distribution Algorithm: Round Robin
+  - Works by sending each new request to the next server in order.
+  - Ensures equal distribution of traffic across servers.
+  - Simple and efficient for balanced workloads.
+
+3. Active-Active vs Active-Passive:
+- Active-Active:
+  - Both servers are actively serving traffic at the same time.
+  - Load balancer distributes traffic to both.
+  - Higher performance and better resource usage.
+
+- Active-Passive:
+  - One server is active, the other idle waiting for failover.
+  - Only used if the active server fails.
+
+- In this setup:
+  - HAProxy is configured as Active-Active.
+  - Both web/application servers handle traffic simultaneously.
+
+4. Primary-Replica (Master-Slave) Database Cluster:
+- Primary Node:
+  - Performs all write and update operations.
+  - Sends updates to the Replica using asynchronous replication.
+
+- Replica Node:
+  - Read-only copy of the database.
+  - Handles read queries to reduce load on the Primary.
+  - Can become primary during failure (manual or automated promotion).
+
+5. Differences Between Primary and Replica for the Application:
+- Application writes go to Primary only.
+- Application reads can be served from Replica.
+- Replica lags slightly behind Primary due to async replication.
+
+6. Issues With This Infrastructure:
+- SPOFs (Single Points of Failure):
+  - Load balancer is a SPOF if not duplicated.
+  - Primary database node is a SPOF.
+- Security Issues:
+  - No firewall → exposed to open network attacks.
+  - No HTTPS → traffic is unencrypted, vulnerable to MITM attacks.
+- No Monitoring:
+  - No metrics (CPU/RAM/disk usage).
+  - No uptime alerts.
+  - No logging/analysis tools.
+
