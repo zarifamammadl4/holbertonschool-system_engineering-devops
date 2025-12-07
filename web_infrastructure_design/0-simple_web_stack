@@ -1,0 +1,17 @@
+User accesses www.foobar.com → DNS (A record) → 8.8.8.8 → Server with:
+- Nginx web server
+- Application server
+- Application code base
+- MySQL database
+
+Domain name: human-readable name pointing to IP
+www → A record
+Web server: handles HTTP and serves static files
+Application server: runs application logic
+Database: stores persistent data
+Communication: HTTP/HTTPS
+
+Issues:
+- Single Point of Failure
+- Downtime during maintenance
+- Cannot scale with heavy traffic
